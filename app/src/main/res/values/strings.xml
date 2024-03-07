@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">Basic Timer</string>
+    <string name="btn_Start">Start</string>
+    <string name="btn_Stop">Stop</string>
+</resources>
