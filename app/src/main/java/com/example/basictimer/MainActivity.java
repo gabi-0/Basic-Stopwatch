@@ -14,7 +14,8 @@ import java.util.TimerTask;
 
 public class MainActivity extends AppCompatActivity {
 
-    private long mStateTime;
+    private int mState;
+    private long mTimestamp;
     private TextView mTimeString;
 
     private Timer mTimer;
@@ -24,21 +25,31 @@ public class MainActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
         mTimeString = findViewById(R.id.timerString);
+        mTimeString.setText(timestampFormat(0));
 
         Button bSwitch = (Button) findViewById(R.id.btnSwitch);
         bSwitch.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                if(mStateTime == 0) {
-                    bSwitch.setText(R.string.btn_Stop);
-                    mTimer = new Timer();
-                    mStateTime = System.currentTimeMillis();
-                    mTimer.schedule(getTimerTask(), 100, 42);
-                } else {
-                    bSwitch.setText(R.string.btn_Stop);
+
+                if(mState == TimerStates.STATE_ACTIVE) { // change to state paused
+                    mState = TimerStates.STATE_PAUSED;
                     mTimer.cancel();
+                    mTimestamp = System.currentTimeMillis() - mTimestamp;
+
                     mTimer.purge();
-                    mStateTime = 0;
+                    bSwitch.setText(R.string.btn_Play);
+                } else {
+                    mTimer = new Timer();
+                    bSwitch.setText(R.string.btn_Pause);
+
+                    if(mState == TimerStates.STATE_PAUSED)
+                        mTimestamp = System.currentTimeMillis() - mTimestamp;
+                    else
+                        mTimestamp = System.currentTimeMillis();
+                    mState = TimerStates.STATE_ACTIVE;
+
+                    mTimer.schedule(getTimerTask(), 100, 42);
                 }
             }
         });
@@ -47,14 +58,14 @@ public class MainActivity extends AppCompatActivity {
     private String timestampFormat(long dif) {
         long mil = dif%1000;
         dif /= 1000;
-        return String.format(Locale.US, "%02d:%02d:%03d", dif/60, dif%60, mil);
+        return String.format(Locale.US, "%02d:%02d.%03d", dif/60, dif%60, mil);
     }
 
     private TimerTask getTimerTask() {
         return new TimerTask() {
             @Override
             public void run() {
-                String fStr = timestampFormat(System.currentTimeMillis() - mStateTime);
+                String fStr = timestampFormat(System.currentTimeMillis() - mTimestamp);
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
