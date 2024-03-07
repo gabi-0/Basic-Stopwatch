@@ -41,7 +41,7 @@ public class MainActivity extends AppCompatActivity {
                     mTimer.purge();
                     bSwitch.setText(R.string.btn_Play);
                     bStop.setVisibility(View.VISIBLE);
-                } else {
+                } else {                                // play / resume
                     mTimer = new Timer();
                     bSwitch.setText(R.string.btn_Pause);
                     bStop.setVisibility(View.INVISIBLE);
@@ -52,7 +52,7 @@ public class MainActivity extends AppCompatActivity {
                         mTimestamp = System.currentTimeMillis();
                     mState = TimerStates.STATE_ACTIVE;
 
-                    mTimer.schedule(getTimerTask(), 100, 42);
+                    mTimer.schedule(getTimerTask(), 40, 40);
                 }
             }
         });
