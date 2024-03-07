@@ -28,6 +28,7 @@ public class MainActivity extends AppCompatActivity {
         mTimeString.setText(timestampFormat(0));
 
         Button bSwitch = (Button) findViewById(R.id.btnSwitch);
+        Button bStop = (Button) findViewById(R.id.btnStop);
         bSwitch.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -39,9 +40,11 @@ public class MainActivity extends AppCompatActivity {
 
                     mTimer.purge();
                     bSwitch.setText(R.string.btn_Play);
+                    bStop.setVisibility(View.VISIBLE);
                 } else {
                     mTimer = new Timer();
                     bSwitch.setText(R.string.btn_Pause);
+                    bStop.setVisibility(View.INVISIBLE);
 
                     if(mState == TimerStates.STATE_PAUSED)
                         mTimestamp = System.currentTimeMillis() - mTimestamp;
@@ -51,6 +54,16 @@ public class MainActivity extends AppCompatActivity {
 
                     mTimer.schedule(getTimerTask(), 100, 42);
                 }
+            }
+        });
+
+        bStop.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mState = TimerStates.STATE_NEW;
+                mTimestamp = 0;
+                bStop.setVisibility(View.INVISIBLE);
+                mTimeString.setText(timestampFormat(0));
             }
         });
     }
