@@ -69,9 +69,10 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private String timestampFormat(long dif) {
-        long mil = dif%1000;
-        dif /= 1000;
-        return String.format(Locale.US, "%02d:%02d.%03d", dif/60, dif%60, mil);
+        dif /= 100;
+        long mil = dif%10;
+        dif /= 10;
+        return String.format(Locale.US, "%02d:%02d.%d", dif/60, dif%60, mil);
     }
 
     private TimerTask getTimerTask() {
