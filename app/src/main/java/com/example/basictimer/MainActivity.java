@@ -2,6 +2,9 @@ package com.example.basictimer;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.content.Intent;
+import android.content.res.Configuration;
+import android.os.Build;
 import android.os.Bundle;
 import android.view.View;
 import android.widget.Button;
@@ -26,6 +29,12 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         mTimeString = findViewById(R.id.timerString);
         mTimeString.setText(timestampFormat(0));
+
+        int theme = this.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+        if(theme == Configuration.UI_MODE_NIGHT_YES) {
+            int white = getResources().getColor(R.color.white);
+            mTimeString.setTextColor(white);
+        }
 
         Button bSwitch = (Button) findViewById(R.id.btnSwitch);
         Button bStop = (Button) findViewById(R.id.btnStop);
@@ -66,6 +75,12 @@ public class MainActivity extends AppCompatActivity {
                 mTimeString.setText(timestampFormat(0));
             }
         });
+
+        Intent svIntent = new Intent(this, TimerService.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            startForegroundService(svIntent);
+        else
+            startService(svIntent);
     }
 
     private String timestampFormat(long dif) {
