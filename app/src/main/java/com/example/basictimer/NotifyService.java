@@ -5,7 +5,6 @@ import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.Service;
-import android.app.StatusBarManager;
 import android.content.Intent;
 import android.content.pm.ServiceInfo;
 import android.os.Build;
@@ -14,11 +13,11 @@ import android.service.notification.StatusBarNotification;
 import android.util.Log;
 
 
-public class TimerService extends Service {
+public class NotifyService extends Service {
 
     private NotificationManager mNotification;
 
-    public TimerService() {
+    public NotifyService() {
     }
 
     @Override

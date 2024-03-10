@@ -1,104 +1,138 @@
 package com.example.basictimer;
 
+import static com.example.basictimer.FormatWatch.timestampAccurateFormat;
+
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.content.ComponentName;
 import android.content.Intent;
+import android.content.ServiceConnection;
 import android.content.res.Configuration;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.IBinder;
+import android.util.Log;
 import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 
-import java.util.Locale;
-import java.util.Timer;
-import java.util.TimerTask;
-
 
 public class MainActivity extends AppCompatActivity {
 
-    private int mState;
-    private long mTimestamp;
-    private TextView mTimeString;
+    private TextView mViewStopwatch;
+    private Button mBtnSwitch;
+    private Button mBtnStop;
 
-    private Timer mTimer;
+    private WatchService mWatchSv;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        mTimeString = findViewById(R.id.timerString);
-        mTimeString.setText(timestampFormat(0));
+        mViewStopwatch = findViewById(R.id.timerString);
+        mViewStopwatch.setText(timestampAccurateFormat(0));
 
         int theme = this.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
         if(theme == Configuration.UI_MODE_NIGHT_YES) {
             int white = getResources().getColor(R.color.white);
-            mTimeString.setTextColor(white);
+            mViewStopwatch.setTextColor(white);
         }
 
-        Button bSwitch = (Button) findViewById(R.id.btnSwitch);
-        Button bStop = (Button) findViewById(R.id.btnStop);
-        bSwitch.setOnClickListener(new View.OnClickListener() {
+        createWatchService();
+
+        mBtnSwitch = findViewById(R.id.btnSwitch);
+        mBtnStop = findViewById(R.id.btnStop);
+        mBtnSwitch.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
 
-                if(mState == TimerStates.STATE_ACTIVE) { // change to state paused
-                    mState = TimerStates.STATE_PAUSED;
-                    mTimer.cancel();
-                    mTimestamp = System.currentTimeMillis() - mTimestamp;
-
-                    mTimer.purge();
-                    bSwitch.setText(R.string.btn_Play);
-                    bStop.setVisibility(View.VISIBLE);
-                } else {                                // play / resume
-                    mTimer = new Timer();
-                    bSwitch.setText(R.string.btn_Pause);
-                    bStop.setVisibility(View.INVISIBLE);
-
-                    if(mState == TimerStates.STATE_PAUSED)
-                        mTimestamp = System.currentTimeMillis() - mTimestamp;
-                    else
-                        mTimestamp = System.currentTimeMillis();
-                    mState = TimerStates.STATE_ACTIVE;
-
-                    mTimer.schedule(getTimerTask(), 40, 40);
-                }
+                // only from STATE_ACTIVE the watch can go to PAUSED
+                if(mWatchSv.getWatchState() == WatchStates.STATE_ACTIVE)
+                    mWatchSv.pauseWatch();
+                else
+                    mWatchSv.startWatch();
             }
         });
 
-        bStop.setOnClickListener(new View.OnClickListener() {
+        mBtnStop.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                mState = TimerStates.STATE_NEW;
-                mTimestamp = 0;
-                bStop.setVisibility(View.INVISIBLE);
-                mTimeString.setText(timestampFormat(0));
+                mWatchSv.stopWatch();
             }
         });
 
-        Intent svIntent = new Intent(this, TimerService.class);
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-            startForegroundService(svIntent);
-        else
-            startService(svIntent);
+//        Intent svIntent = new Intent(this, NotifyService.class);
+//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+//            startForegroundService(svIntent);
+//        else
+//            startService(svIntent);
     }
 
-    private String timestampFormat(long dif) {
-        dif /= 100;
-        long mil = dif%10;
-        dif /= 10;
-        return String.format(Locale.US, "%02d:%02d.%d", dif/60, dif%60, mil);
-    }
+    private void createWatchService() {
+        Intent watchInt = new Intent(this, WatchService.class);
+        watchInt.putExtra(ServiceComm.STARTED_FROM, ServiceComm.FROM_UI);
+        startService(watchInt);
 
-    private TimerTask getTimerTask() {
-        return new TimerTask() {
+        bindService(watchInt, new ServiceConnection() {
             @Override
-            public void run() {
-                String fStr = timestampFormat(System.currentTimeMillis() - mTimestamp);
+            public void onServiceConnected(ComponentName name, IBinder service) {
+                WatchService.LocalBinder svBind = (WatchService.LocalBinder)service;
+                svBind.setCallback(ServiceComm.FROM_UI, getSvCallback());
+                mWatchSv = svBind.getService();
+                mWatchSv.setUIState(ServiceComm.FROM_UI, ServiceComm.ACTIVE);
+            }
+
+            @Override
+            public void onServiceDisconnected(ComponentName name) {
+//                createWatchService();
+                Log.e("Service", "watch service was disconnected");
+            }
+        }, BIND_IMPORTANT);
+    }
+
+    private ServiceCallback getSvCallback() {
+        return new ServiceCallback(){
+            @Override
+            public void onStart() {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
-                        mTimeString.setText(fStr);
+                        mBtnSwitch.setText(R.string.btn_Pause);
+                        mBtnStop.setVisibility(View.INVISIBLE);
+                    }
+                });
+            }
+
+            @Override
+            public void onPause() {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        mBtnSwitch.setText(R.string.btn_Play);
+                        mBtnStop.setVisibility(View.VISIBLE);
+                    }
+                });
+            }
+
+            @Override
+            public void onStop() {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        mBtnSwitch.setText(R.string.btn_Play);
+                        mBtnStop.setVisibility(View.INVISIBLE);
+                        mViewStopwatch.setText(timestampAccurateFormat(0));
+                    }
+                });
+            }
+
+            @Override
+            public void onUpdate(long dif) {
+                runOnUiThread(new Runnable() {
+                    @Override
+                    public void run() {
+                        mViewStopwatch.setText(timestampAccurateFormat(dif));
                     }
                 });
             }
