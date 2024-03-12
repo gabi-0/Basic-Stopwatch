@@ -1,6 +1,8 @@
 <resources>
-    <string name="app_name">Basic Timer</string>
+    <string name="app_name">Basic Stopwatch</string>
     <string name="btn_Play">Play</string>
     <string name="btn_Pause">Pause</string>
     <string name="btn_Stop">Stop</string>
+    <string name="notif_running">Running</string>
+    <string name="notif_paused">Paused</string>
 </resources>

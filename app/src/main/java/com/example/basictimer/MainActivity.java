@@ -17,84 +17,66 @@ import android.widget.Button;
 import android.widget.TextView;
 
 
+
 public class MainActivity extends AppCompatActivity {
 
     private TextView mViewStopwatch;
     private Button mBtnSwitch;
     private Button mBtnStop;
 
-    private WatchService mWatchSv;
-
+    private WatchService mWatchSv = null;
+    private ServiceConnection mSvCon = null;
+    private Intent mWatchIntent = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        loadIntent();
+        startService(mWatchIntent);
+        bindWatchSv();
+
         mViewStopwatch = findViewById(R.id.timerString);
         mViewStopwatch.setText(timestampAccurateFormat(0));
-
-        int theme = this.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
-        if(theme == Configuration.UI_MODE_NIGHT_YES) {
-            int white = getResources().getColor(R.color.white);
-            mViewStopwatch.setTextColor(white);
-        }
-
-        createWatchService();
-
         mBtnSwitch = findViewById(R.id.btnSwitch);
         mBtnStop = findViewById(R.id.btnStop);
-        mBtnSwitch.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-
-                // only from STATE_ACTIVE the watch can go to PAUSED
-                if(mWatchSv.getWatchState() == WatchStates.STATE_ACTIVE)
-                    mWatchSv.pauseWatch();
-                else
-                    mWatchSv.startWatch();
-            }
-        });
-
-        mBtnStop.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                mWatchSv.stopWatch();
-            }
-        });
-
-//        Intent svIntent = new Intent(this, NotifyService.class);
-//        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-//            startForegroundService(svIntent);
-//        else
-//            startService(svIntent);
     }
 
-    private void createWatchService() {
-        Intent watchInt = new Intent(this, WatchService.class);
-        watchInt.putExtra(ServiceComm.STARTED_FROM, ServiceComm.FROM_UI);
-        startService(watchInt);
+    private void loadIntent() {
+        if(mWatchIntent != null) return;
 
-        bindService(watchInt, new ServiceConnection() {
-            @Override
-            public void onServiceConnected(ComponentName name, IBinder service) {
-                WatchService.LocalBinder svBind = (WatchService.LocalBinder)service;
-                svBind.setCallback(ServiceComm.FROM_UI, getSvCallback());
-                mWatchSv = svBind.getService();
-                mWatchSv.setUIState(ServiceComm.FROM_UI, ServiceComm.ACTIVE);
-            }
+        mWatchIntent = new Intent(this, WatchService.class);
+        mWatchIntent.putExtra(ServiceComm.STARTED_FROM, ServiceComm.FROM_UI);
+    }
 
-            @Override
-            public void onServiceDisconnected(ComponentName name) {
+    private void bindWatchSv() {
+        if(mSvCon == null) {
+            mSvCon = new ServiceConnection() {
+                @Override
+                public void onServiceConnected(ComponentName name, IBinder service) {
+                    WatchService.LocalBinder svBind = (WatchService.LocalBinder) service;
+                    mWatchSv = svBind.getService();
+                    svBind.setCallback(ServiceComm.FROM_UI, getSvCallback());
+                    mWatchSv.setUIState(ServiceComm.FROM_UI, ServiceComm.ACTIVE);
+                    mViewStopwatch.setText(timestampAccurateFormat(mWatchSv.getWatchDif()));
+                    loadBtnEvents();
+                }
+
+                @Override
+                public void onServiceDisconnected(ComponentName name) {
 //                createWatchService();
-                Log.e("Service", "watch service was disconnected");
-            }
-        }, BIND_IMPORTANT);
+                    Log.e("Main", "watch service was disconnected");
+                }
+            };
+        }
+        bindService(mWatchIntent, mSvCon, BIND_IMPORTANT);
     }
 
     private ServiceCallback getSvCallback() {
         return new ServiceCallback(){
             @Override
-            public void onStart() {
+            public void onStart(long dif) {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
@@ -105,12 +87,15 @@ public class MainActivity extends AppCompatActivity {
             }
 
             @Override
-            public void onPause() {
+            public void onPause(long dif) {
                 runOnUiThread(new Runnable() {
                     @Override
                     public void run() {
                         mBtnSwitch.setText(R.string.btn_Play);
-                        mBtnStop.setVisibility(View.VISIBLE);
+                        if(mWatchSv.getWatchTimestamp() == 0)       // TODO: figure why is this IF here
+                            mBtnStop.setVisibility(View.INVISIBLE);
+                        else
+                            mBtnStop.setVisibility(View.VISIBLE);
                     }
                 });
             }
@@ -138,4 +123,70 @@ public class MainActivity extends AppCompatActivity {
             }
         };
     }
+
+    private void loadBtnEvents() {
+        mBtnSwitch.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+
+                // only from STATE_ACTIVE the watch can go to PAUSED
+                if(mWatchSv.getWatchState() == WatchStates.STATE_ACTIVE)
+                    mWatchSv.pauseWatch();
+                else
+                    mWatchSv.startWatch();
+            }
+        });
+
+        mBtnStop.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mWatchSv.stopWatch();
+            }
+        });
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        mWatchSv.setUIState(ServiceComm.FROM_UI, ServiceComm.INACTIVE);
+
+        Intent svIntent = new Intent(this, NotifyService.class);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
+            startForegroundService(svIntent);
+        unbindService(mSvCon);
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        int theme = this.getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK;
+        if(theme == Configuration.UI_MODE_NIGHT_YES) {
+            int white = getResources().getColor(R.color.white);
+            mViewStopwatch.setTextColor(white);
+        }
+
+        loadIntent();
+        bindWatchSv();
+
+        if(mWatchSv != null) {
+            mWatchSv.setUIState(ServiceComm.FROM_UI, ServiceComm.ACTIVE);
+            mViewStopwatch.setText(timestampAccurateFormat(mWatchSv.getWatchDif()));
+        }
+    }
+
+/*    @Override
+    public void onSaveInstanceState(@NonNull Bundle outState, @NonNull PersistableBundle outPersistentState) {
+        super.onSaveInstanceState(outState, outPersistentState);
+        ActivityStateSaver activSt = new ActivityStateSaver();
+        activSt.serviceCon = mSvCon;
+        outState.putSerializable("e", activSt);
+        Log.i("main_save", "saveinstance");
+    }
+
+    @Override
+    protected void onRestoreInstanceState(@NonNull Bundle savedInstanceState) {
+        super.onRestoreInstanceState(savedInstanceState);
+        mSvCon = (ServiceConnection) savedInstanceState.getSerializable("e");
+        Log.i("main_save", "restoring-------");
+    }*/
 }

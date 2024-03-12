@@ -6,7 +6,9 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.os.Binder;
 import android.os.IBinder;
+import android.util.Log;
 
+import java.io.Serializable;
 import java.util.Locale;
 import java.util.Timer;
 import java.util.TimerTask;
@@ -18,6 +20,7 @@ public class WatchService extends Service {
     private Timer mTimer;
     private int mWatchState;
     private long mWatchTimestamp;
+    private long mLastNotify;
 
     private final IBinder UIBinder = new LocalBinder();
     private ServiceCallback uiCallback;
@@ -31,6 +34,20 @@ public class WatchService extends Service {
     public void onCreate() {
         super.onCreate();
         mWatchState = WatchStates.STATE_NEW;
+        mLastNotify = 0;
+        Log.e("w++++service", "create");
+    }
+
+    @Override
+    public int onStartCommand(Intent intent, int flags, int startId) {
+        Log.e("w++service", "sv started: "+ startId );
+        return super.onStartCommand(intent, flags, startId);
+    }
+
+    @Override
+    public void onDestroy() {
+        super.onDestroy();
+        Log.e("w++++service", "destroy:::::::");
     }
 
     public void startWatch() {
@@ -45,8 +62,8 @@ public class WatchService extends Service {
             mWatchTimestamp = System.currentTimeMillis();
         mWatchState = WatchStates.STATE_ACTIVE;
 
-        if(activityState == ServiceComm.ACTIVE) uiCallback.onStart();
-        if(notifyState == ServiceComm.ACTIVE)   notifyCallback.onStart();
+        if(activityState == ServiceComm.ACTIVE) uiCallback.onStart(getDif());
+        if(notifyState == ServiceComm.ACTIVE)   notifyCallback.onStart(getDif());
 
         mTimer.schedule(new TimerTask() {
             @Override
@@ -54,8 +71,12 @@ public class WatchService extends Service {
                 long dif = System.currentTimeMillis() - mWatchTimestamp;
                 if(activityState == ServiceComm.ACTIVE)
                     uiCallback.onUpdate(dif);
-                if(notifyState == ServiceComm.ACTIVE)
-                    notifyCallback.onUpdate(dif);
+                if(notifyState == ServiceComm.ACTIVE) {
+                    if((dif/1000) > mLastNotify) {
+                        mLastNotify = dif/1000;
+                        notifyCallback.onUpdate(dif);
+                    }
+                }
             }
         }, 40, 40);
     }
@@ -66,8 +87,8 @@ public class WatchService extends Service {
         mTimer.cancel();
         mWatchTimestamp = System.currentTimeMillis() - mWatchTimestamp;
 
-        if(activityState == ServiceComm.ACTIVE) uiCallback.onPause();
-        if(notifyState == ServiceComm.ACTIVE)   notifyCallback.onPause();
+        if(activityState == ServiceComm.ACTIVE) uiCallback.onPause(mWatchTimestamp);
+        if(notifyState == ServiceComm.ACTIVE)   notifyCallback.onPause(mWatchTimestamp);
         mTimer.purge();
     }
 
@@ -85,10 +106,24 @@ public class WatchService extends Service {
         return mWatchState;
     }
 
+    public long getWatchTimestamp() {
+        return mWatchTimestamp;
+    }
+
+    public long getDif() {
+        return System.currentTimeMillis() - mWatchTimestamp;
+    }
+
+    public long getWatchDif() {
+        if(mWatchState == WatchStates.STATE_ACTIVE) return getDif();
+        return mWatchTimestamp;
+    }
+
     public void setUIState(int from, int st) {
-        if(from == ServiceComm.FROM_NOTIF)
+        if(from == ServiceComm.FROM_NOTIF) {
             notifyState = st;
-        else
+            mLastNotify = 0;
+        } else
             activityState = st;
     }
 
@@ -97,12 +132,16 @@ public class WatchService extends Service {
             return WatchService.this;
         }
         public void setCallback(int from, ServiceCallback clbk) {
-            if(from == ServiceComm.FROM_NOTIF)
+            if(from == ServiceComm.FROM_NOTIF) {
                 notifyCallback = clbk;
-            else
+                if(mWatchState == WatchStates.STATE_ACTIVE) notifyCallback.onStart(getDif());
+                else notifyCallback.onPause(mWatchTimestamp);
+            }  else {
                 uiCallback = clbk;
+                if(mWatchState == WatchStates.STATE_ACTIVE) uiCallback.onStart(getDif());
+                else uiCallback.onPause(mWatchTimestamp);
+            }
         }
-
     }
 
     @Override

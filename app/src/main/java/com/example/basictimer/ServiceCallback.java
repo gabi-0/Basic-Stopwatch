@@ -1,8 +1,8 @@
 package com.example.basictimer;
 
 interface ServiceCallback {
-    public void onStart();
-    public void onPause();
+    public void onStart(long dif);
+    public void onPause(long dif);
     public void onStop();
     public void onUpdate(long dif);
 }
